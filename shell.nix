@@ -5,6 +5,7 @@ in
 
         # Tools available in Nix shell.
         nativeBuildInputs = [
+            nixpkgs.blake3                  # Hash function.
             nixpkgs.ldc                     # D compiler.
             nixpkgs.python3Packages.sphinx  # Documentation typesetter.
         ];
