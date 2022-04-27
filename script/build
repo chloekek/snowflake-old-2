@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -efuxo pipefail
+
+ldc2Flags=(
+    -O3       # Optimize code.
+    -dip1000  # Escape analysis.
+    -dip1008  # @nogc exceptions.
+)
+
+sphinxBuildFlags=(
+    -a            # Disable cache (it's broken).
+    -W            # Warnings as errors.
+    --keep-going  # Do not stop at first warning.
+)
+
+mkdir --parents build
+
+ldc2 -of=build/snowflake "${ldc2Flags[@]}" source/main.d
+
+sphinx-build "${sphinxBuildFlags[@]}" manual build/manual
