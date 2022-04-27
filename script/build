@@ -5,7 +5,6 @@ set -efuxo pipefail
 ldc2Flags=(
     -O3       # Optimize code.
     -dip1000  # Escape analysis.
-    -dip1008  # @nogc exceptions.
 )
 
 sphinxBuildFlags=(

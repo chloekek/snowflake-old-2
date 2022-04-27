@@ -3,13 +3,15 @@ module snowflake.main;
 @safe
 void main()
 {
-    import snowflake.actionPhase.runAction : enterRunActionSandbox;
-    import std.process : spawnShell, wait;
+    import snowflake.actionPhase.runAction;
+    import snowflake.context : Context;
 
+    import os = snowflake.utility.os;
+
+    auto context = new Context(".snowflake");
+
+    executeRunAction(context);
+
+    os.chdir(".snowflake/scratches/0");
     enterRunActionSandbox();
-
-    auto pid = spawnShell(`
-        /nix/store/l0zvs9z152zys4sxa64hkvnxalgkszpi-coreutils-9.0/bin/ls -alh
-    `);
-    wait(pid);
 }

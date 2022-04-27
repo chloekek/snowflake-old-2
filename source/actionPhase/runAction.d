@@ -1,11 +1,30 @@
 module snowflake.actionPhase.runAction;
 
+import std.conv : octal;
+import snowflake.context : Context;
+
+import os = snowflake.utility.os;
+
 /**
  * Execute a run action.
  */
 @safe
-void executeRunAction()
+void executeRunAction(Context context)
 {
+    const scratchDir = context.newScratchDir();
+    scope (exit) os.close(scratchDir);
+
+    // Working directory for the command.
+    os.mkdirat(scratchDir, "build", octal!"755");
+
+    // Directory in which outputs are to be placed.
+    os.mkdirat(scratchDir, "output", octal!"755");
+
+    // TODO: Spawn sandbox command.
+
+    // TODO: Check that each output exists.
+
+    // TODO: Move outputs to cache.
 }
 
 /**
@@ -19,9 +38,6 @@ void executeRunAction()
 void enterRunActionSandbox()
 {
     import snowflake.config : ENV_PATH, SH_PATH;
-    import std.conv : octal;
-
-    import os = snowflake.utility.os;
 
     // Create root directory structure.
     os.mkdir("bin",       octal!"755");
@@ -47,13 +63,14 @@ void enterRunActionSandbox()
 
     // Create bind mounts.
     mountBindRdonly("/nix/store", "nix/store");
+    // TODO: Bind mount user-declared inputs.
 
     // Change root directory to working directory.
     os.chroot(".");
 
-    // chroot does not adjust working directory,
-    // so it is currently most likely dangling.
-    os.chdir("/");
+    // Change the working directory to the build directory.
+    // Must be absolute as chroot does not change the working directory.
+    os.chdir("/build");
 }
 
 /**
@@ -65,8 +82,6 @@ void enterRunActionSandbox()
 private @safe
 void mountBindRdonly(scope const(char)[] source, scope const(char)[] target)
 {
-    import os = snowflake.utility.os;
-
     os.mount(
         source,
         target,
