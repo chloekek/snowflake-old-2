@@ -1,22 +1,13 @@
 module snowflake.main;
 
 @safe
-void main()
+void main(string[] args)
 {
-    import snowflake.actionPhase.runAction;
+    import core.time : dur;
+    import snowflake.actionPhase.runAction : performRunAction;
     import snowflake.context : Context;
-    import snowflake.utility.hashFile : hashFileAt;
-    import std.stdio : writefln;
-
-    import os = snowflake.utility.os;
-
-    const hash = hashFileAt(os.AT_FDCWD, "/home/r/snowflake/source");
-    writefln!"%(%02x%)"(hash);
 
     auto context = new Context(".snowflake");
 
-    executeRunAction(context, ["main.o"]);
-
-    os.chdir(".snowflake/scratches/0");
-    enterRunActionSandbox();
+    performRunAction(context, 5000.dur!"msecs", ["main.o"]);
 }

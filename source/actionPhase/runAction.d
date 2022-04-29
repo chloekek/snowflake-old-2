@@ -1,31 +1,87 @@
 module snowflake.actionPhase.runAction;
 
-import std.conv : octal;
+import core.time : Duration;
 import snowflake.context : Context;
+import snowflake.utility.command : Command;
 
 import os = snowflake.utility.os;
 
 /**
- * Execute a run action.
+ * Perform a run action.
  */
 @safe
-void executeRunAction(
-    Context  context,
-    string[] outputs,
-)
+void performRunAction(Context context, Duration timeout, string[] outputs)
 {
+    import snowflake.config : ENV_PATH, SH_PATH;
     import snowflake.utility.hashFile : Hash, hashFileAt;
+    import std.conv : octal;
+    import std.string : format;
 
     const scratchDir = context.newScratchDir();
     scope (exit) os.close(scratchDir);
 
-    // Working directory for the command.
-    os.mkdirat(scratchDir, "build", octal!"755");
+    // Create root directory structure.
+    os.mkdirat(scratchDir, "bin",       octal!"755");
+    os.mkdirat(scratchDir, "nix",       octal!"755");
+    os.mkdirat(scratchDir, "nix/store", octal!"755");
+    os.mkdirat(scratchDir, "proc",      octal!"555");
+    os.mkdirat(scratchDir, "usr",       octal!"755");
+    os.mkdirat(scratchDir, "usr/bin",   octal!"755");
+    os.mkdirat(scratchDir, "build",     octal!"755");  // Working directory.
+    os.mkdirat(scratchDir, "output",    octal!"755");  // Outputs placed here.
 
-    // Directory in which outputs are to be placed.
-    os.mkdirat(scratchDir, "output", octal!"755");
+    // Create symbolic links to implicit dependencies.
+    os.symlinkat(SH_PATH,  scratchDir, "bin/sh");
+    os.symlinkat(ENV_PATH, scratchDir, "usr/bin/env");
 
-    // TODO: Spawn sandbox command.
+    // Configure the command to run.
+    auto command = Command(
+        /* pathname */ "/bin/sh",
+        /* argv     */ ["bash", "-c", `
+            export PATH=/nix/store/l0zvs9z152zys4sxa64hkvnxalgkszpi-coreutils-9.0/bin
+            touch /output/main.o
+            exit 1
+        `],
+        /* envp     */ ["USER=root"],
+    );
+
+    // Create namespaces to form a container.
+    command.cloneNewcgroup = true;  // New cgroup namespace.
+    command.cloneNewipc    = true;  // New IPC namespace.
+    command.cloneNewnet    = true;  // New network namespace.
+    command.cloneNewns     = true;  // New mount namespace.
+    command.cloneNewpid    = true;  // New PID namespace.
+    command.cloneNewuser   = true;  // New user namespace.
+    command.cloneNewuts    = true;  // New UTS namespace.
+
+    // Generate a pidfd for the process.
+    command.clonePidfd = true;
+
+    // Map root inside container to actual user outside container.
+    command.setgroups = "deny\n";
+    command.uid_map   = format!"0 %d 1\n"(os.getuid);
+    command.gid_map   = format!"0 %d 1\n"(os.getgid);
+
+    // Set the working directory to the scratch directory.
+    command.fchdir = scratchDir;
+
+    // systemd mounts `/` as `MS_SHARED`, but `MS_PRIVATE` is more isolated.
+    command.mount("none", "/", null, os.MS_PRIVATE | os.MS_REC, null);
+
+    // Mount `/proc` which is required for some programs to function properly.
+    const procMountFlags = os.MS_NODEV | os.MS_NOEXEC | os.MS_NOSUID;
+    command.mount("proc", "proc", "proc", procMountFlags, null);
+
+    // Create bind mounts so the container can access outside files.
+    mountBindRdonly(command, "/nix/store", "nix/store");
+
+    // Set the root directory of the container to the working directory.
+    // Then set the working directory to the build directory.
+    command.chroot      = ".";
+    command.chrootChdir = "/build";
+
+    // Run the command.
+    command.run(timeout);
 
     // Open the output directory.
     const outputDir = os.openat(scratchDir, "output",
@@ -46,73 +102,20 @@ void executeRunAction(
 }
 
 /**
- * Enter the build sandbox for a run action.
- *
- * This is not called directly by `executeRunAction`.
- * Rather, `executeRunAction` spawns a child process
- * which in turn calls this function (see `main`).
- */
-@safe
-void enterRunActionSandbox()
-{
-    import snowflake.config : ENV_PATH, SH_PATH;
-
-    // Create root directory structure.
-    os.mkdir("bin",       octal!"755");
-    os.mkdir("nix",       octal!"755");
-    os.mkdir("nix/store", octal!"755");
-    os.mkdir("usr",       octal!"755");
-    os.mkdir("usr/bin",   octal!"755");
-
-    // Create symbolic links to implicit dependencies.
-    os.symlink(SH_PATH,  "bin/sh");
-    os.symlink(ENV_PATH, "usr/bin/env");
-
-    // Create new sets of identifies for all these resources.
-    os.unshare(
-        os.CLONE_NEWCGROUP |  // Create cgroup namespace.
-        os.CLONE_NEWIPC    |  // Create IPC namespace.
-        os.CLONE_NEWNET    |  // Create network namespace.
-        os.CLONE_NEWNS     |  // Create mount namespace.
-        os.CLONE_NEWPID    |  // Create PID namespace.
-        os.CLONE_NEWUSER   |  // Create user namespace.
-        os.CLONE_NEWUTS        // Create UTS namespace.
-    );
-
-    // Create bind mounts.
-    mountBindRdonly("/nix/store", "nix/store");
-    // TODO: Bind mount user-declared inputs.
-
-    // Change root directory to working directory.
-    os.chroot(".");
-
-    // Change the working directory to the build directory.
-    // Must be absolute as chroot does not change the working directory.
-    os.chdir("/build");
-}
-
-/**
  * Create a read-only bind mount.
  *
  * This is more involved than simply passing `MS_BIND | MS_RDONLY`.
  * See https://unix.stackexchange.com/a/492462 for more information.
  */
-private @safe
-void mountBindRdonly(scope const(char)[] source, scope const(char)[] target)
+private pure @safe
+void mountBindRdonly(
+    ref scope Command       command,
+    scope     const(char)[] source,
+    scope     const(char)[] target,
+)
 {
-    os.mount(
-        source,
-        target,
-        null,  // Ignored with MS_BIND.
-        os.MS_BIND,
-        null,  // Ignored with MS_BIND.
-    );
-
-    os.mount(
-        "none",
-        target,
-        null,  // Ignored with MS_BIND.
-        os.MS_BIND | os.MS_RDONLY | os.MS_REMOUNT,
-        null,  // Ignored with MS_BIND.
-    );
+    const flags1 = os.MS_BIND | os.MS_REC;
+    const flags2 = flags1 | os.MS_RDONLY | os.MS_REMOUNT;
+    command.mount(source, target, null, flags1, null);
+    command.mount("none", target, null, flags2, null);
 }

@@ -22,13 +22,18 @@ mkdir --parents build
 # Build software
 
 ldc2Flags=(
-    -dip1000    # Escape analysis.
-    -L-lblake3  # Link with libblake3.
+    -preview=shortenedMethods  # `=>` syntax.
+    -dip1000                   # Escape analysis.
+    -L-lblake3                 # Link with libblake3.
 )
 
 if (( $release )); then
     ldc2Flags+=(
         -O3  # Optimize code.
+    )
+else
+    ldc2Flags+=(
+        -g  # Include debug symbols.
     )
 fi
 

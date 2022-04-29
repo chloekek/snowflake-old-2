@@ -14,44 +14,62 @@
  */
 module snowflake.utility.os;
 
-import core.stdc.config : c_ulong;
+import core.stdc.config : c_long, c_ulong;
 import std.exception : errnoEnforce;
 import std.string : toStringz;
 import std.typecons : Nullable;
 
 import os_dirent = core.sys.posix.dirent;
 import os_fcntl = core.sys.posix.fcntl;
+import os_poll = core.sys.posix.poll;
 import os_sched = core.sys.linux.sched;
+import os_signal = core.sys.posix.signal;
 import os_sys_stat = core.sys.posix.sys.stat;
+import os_sys_wait = core.sys.posix.sys.wait;
 import os_unistd = core.sys.posix.unistd;
 
 // Re-export types from druntime.
+public import core.sys.posix.poll :
+    pollfd;
+public import core.sys.posix.signal :
+    SIGKILL;
 public import core.sys.posix.sys.stat :
     mode_t, stat_t;
+public import core.sys.posix.sys.wait :
+    pid_t;
 
 // Re-export constants from druntime.
 public import core.sys.posix.fcntl :
     AT_FDCWD, AT_SYMLINK_NOFOLLOW;
-public import core.sys.linux.sched :
-    CLONE_NEWCGROUP, CLONE_NEWIPC, CLONE_NEWNET, CLONE_NEWNS,
-    CLONE_NEWPID, CLONE_NEWUSER, CLONE_NEWUTS;
-
-// Re-export functions from druntime.
+public import core.sys.posix.poll :
+    POLLIN;
 public import core.sys.posix.sys.stat :
     S_IFDIR, S_IFLNK, S_IFMT, S_IFREG;
+
+// Re-export functions from druntime.
+public import core.sys.posix.unistd :
+    getgid, getuid;
+public import core.sys.posix.sys.wait :
+    WEXITSTATUS, WIFEXITED;
 
 // These are not in druntime yet.
 extern (C) nothrow private @nogc
 {
-    public enum MS_BIND    = 0x1000;
-    public enum MS_RDONLY  = 0x0001;
-    public enum MS_REC     = 0x4000;
-    public enum MS_REMOUNT = 0x0020;
+    public enum MS_BIND    = 0x01000;
+    public enum MS_NODEV   = 0x00004;
+    public enum MS_NOEXEC  = 0x00008;
+    public enum MS_NOSUID  = 0x00002;
+    public enum MS_PRIVATE = 0x40000;
+    public enum MS_RDONLY  = 0x00001;
+    public enum MS_REC     = 0x04000;
+    public enum MS_REMOUNT = 0x00020;
 
     public enum O_CLOEXEC   = 0x080000;
     public enum O_DIRECTORY = 0x010000;
     public enum O_PATH      = 0x200000;
     public enum O_RDONLY    = 0x000000;
+    public enum O_TRUNC     = 0x000200;
+    public enum O_WRONLY    = 0x000001;
 
     pragma (mangle, "fdopendir")
     @trusted os_dirent.DIR* os_dirent_fdopendir(int fd);
@@ -64,9 +82,6 @@ extern (C) nothrow private @nogc
         mode_t       mode,
     );
 
-    pragma (mangle, "chroot")
-    @system int os_unistd_chroot(const(char)* path);
-
     pragma (mangle, "fstatat")
     @system int os_sys_stat_fstatat(
         int          dirfd,
@@ -75,20 +90,21 @@ extern (C) nothrow private @nogc
         int          flags,
     );
 
-    pragma (mangle, "mount")
-    @system int os_sys_mount_mount(
-        const(char)* source,
-        const(char)* target,
-        const(char)* filesystemtype,
-        c_ulong      mountflags,
-        const(void)* data,
-    );
-
     pragma (mangle, "mkdirat")
     @system int os_sys_stat_mkdirat(
         int          dirfd,
         const(char)* pathname,
         mode_t       mode,
+    );
+
+    pragma (mangle, "pipe2")
+    @system int os_unistd_pipe2(int* pipefd, int flags);
+
+    pragma (mangle, "symlinkat")
+    @system int os_unistd_symlinkat(
+        const(char)* target,
+        int          newdirfd,
+        const(char)* linkpath,
     );
 
     pragma (mangle, "readlinkat")
@@ -137,20 +153,6 @@ public:
     }
 }
 
-@trusted
-void chdir(scope const(char)[] path)
-{
-    const ok = os_unistd.chdir(path.toStringz);
-    errnoEnforce(ok != -1, "chdir: " ~ path);
-}
-
-@trusted
-void chroot(scope const(char)[] path)
-{
-    const ok = os_unistd_chroot(path.toStringz);
-    errnoEnforce(ok != -1, "chroot: " ~ path);
-}
-
 @safe
 void close(int fd)
 {
@@ -176,6 +178,13 @@ stat_t fstatat(int dirfd, scope const(char)[] pathname, int flags)
 }
 
 @trusted
+void kill(pid_t pid, int sig)
+{
+    const ok = os_signal.kill(pid, sig);
+    errnoEnforce(ok != -1, "kill");
+}
+
+@trusted
 void mkdir(scope const(char)[] path, mode_t mode)
 {
     const ok = os_sys_stat.mkdir(path.toStringz, mode);
@@ -187,25 +196,6 @@ void mkdirat(int dirfd, scope const(char)[] path, mode_t mode)
 {
     const ok = os_sys_stat_mkdirat(dirfd, path.toStringz, mode);
     errnoEnforce(ok != -1, "mkdirat: " ~ path);
-}
-
-@trusted
-void mount(
-    scope const(char)[] source,
-    scope const(char)[] target,
-    scope const(char)[] filesystemtype,
-    c_ulong             mountflags,
-    scope const(char)[] data,
-)
-{
-    const ok = os_sys_mount_mount(
-        source.toStringz,
-        target.toStringz,
-        filesystemtype.toStringz,
-        mountflags,
-        data.toStringz,
-    );
-    errnoEnforce(ok != -1, "mount: " ~ target ~ " -> " ~ source);
 }
 
 @trusted
@@ -229,6 +219,25 @@ DIR fdopendir(int fd)
 
     errnoEnforce(dir !is null, "fdopendir");
     return DIR(dir);
+}
+
+@trusted
+void pipe2(int flags, out int pipeR, out int pipeW)
+{
+    flags |= O_CLOEXEC;
+    int[2] pipefd;
+    const ok = os_unistd_pipe2(pipefd.ptr, flags);
+    errnoEnforce(ok != -1, "pipe");
+    pipeR = pipefd[0];
+    pipeW = pipefd[1];
+}
+
+@trusted
+int poll(scope pollfd[] fds, int timeout)
+{
+    const n = os_poll.poll(fds.ptr, fds.length, timeout);
+    errnoEnforce(n != -1, "poll");
+    return n;
 }
 
 @trusted
@@ -285,15 +294,32 @@ char[] readlinkat(
 }
 
 @trusted
-void symlink(scope const(char)[] target, scope const(char)[] linkpath)
+void symlinkat(
+    scope const(char)[] target,
+    int newdirfd,
+    scope const(char)[] linkpath,
+)
 {
-    const ok = os_unistd.symlink(target.toStringz, linkpath.toStringz);
-    errnoEnforce(ok != -1, "symlink: " ~ linkpath ~ " -> " ~ target);
+    const ok = os_unistd_symlinkat(
+        target.toStringz,
+        newdirfd,
+        linkpath.toStringz,
+    );
+    errnoEnforce(ok != -1, "symlinkat: " ~ linkpath ~ " -> " ~ target);
 }
 
-@safe
-void unshare(int flags)
+@trusted
+pid_t waitpid(pid_t pid, out int wstatus, int options)
 {
-    const ok = os_sched.unshare(flags);
-    errnoEnforce(ok != -1, "unshare");
+    const result = os_sys_wait.waitpid(pid, &wstatus, options);
+    errnoEnforce(result != -1, "waitpid");
+    return result;
+}
+
+@trusted
+size_t write(int fd, scope const(ubyte)[] buf)
+{
+    const length = os_unistd.write(fd, buf.ptr, buf.length);
+    errnoEnforce(length != -1, "write");
+    return length;
 }
