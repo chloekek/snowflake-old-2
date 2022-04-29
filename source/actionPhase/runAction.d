@@ -9,8 +9,13 @@ import os = snowflake.utility.os;
  * Execute a run action.
  */
 @safe
-void executeRunAction(Context context)
+void executeRunAction(
+    Context  context,
+    string[] outputs,
+)
 {
+    import snowflake.utility.hashFile : Hash, hashFileAt;
+
     const scratchDir = context.newScratchDir();
     scope (exit) os.close(scratchDir);
 
@@ -22,7 +27,20 @@ void executeRunAction(Context context)
 
     // TODO: Spawn sandbox command.
 
-    // TODO: Check that each output exists.
+    // Open the output directory.
+    const outputDir = os.openat(scratchDir, "output",
+                                os.O_DIRECTORY | os.O_PATH, 0);
+    scope (exit) os.close(outputDir);
+
+    // Compute the hash of each output.
+    // This must not be interleaved with moving outputs to the cache,
+    // because we don't want to move any outputs to the cache
+    // if any output was not present or not hashable.
+    Hash[string] outputHashes;
+    foreach (output; outputs) {
+        const hash = hashFileAt(outputDir, output);
+        outputHashes[output] = hash;
+    }
 
     // TODO: Move outputs to cache.
 }
@@ -77,7 +95,7 @@ void enterRunActionSandbox()
  * Create a read-only bind mount.
  *
  * This is more involved than simply passing `MS_BIND | MS_RDONLY`.
- * See https://unix.stackexchange.com/a/128388 for more information.
+ * See https://unix.stackexchange.com/a/492462 for more information.
  */
 private @safe
 void mountBindRdonly(scope const(char)[] source, scope const(char)[] target)

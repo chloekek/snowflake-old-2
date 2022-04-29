@@ -15,7 +15,7 @@ void main()
 
     auto context = new Context(".snowflake");
 
-    executeRunAction(context);
+    executeRunAction(context, ["main.o"]);
 
     os.chdir(".snowflake/scratches/0");
     enterRunActionSandbox();

@@ -6,6 +6,11 @@ import std.conv : octal;
 import os = snowflake.utility.os;
 
 /**
+ * Hash of a file.
+ */
+alias Hash = ubyte[32];
+
+/**
  * Compute the hash of a file.
  *
  * The file may be a regular file, a symbolic link,
@@ -15,7 +20,7 @@ import os = snowflake.utility.os;
  * other attributes such as file path and modification date are not.
  */
 @safe
-ubyte[32] hashFileAt(int dirfd, scope const(char)[] path)
+Hash hashFileAt(int dirfd, scope const(char)[] path)
 {
     import snowflake.utility.blake3 : Blake3;
     auto digest = Blake3(null);
