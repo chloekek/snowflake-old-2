@@ -6,6 +6,19 @@ This chapter describes, at a high level, the internals of Snowflake.
 Lower level help can be found in the form of comments in the source code.
 
 
+Building
+--------
+
+Snowflake is currently built using a Bash script.
+To create a non-optimized build, run the following command:
+
+.. code:: bash
+
+   nix-shell --pure --run script/build
+
+The output appears in the ``build`` directory.
+
+
 Context
 -------
 
