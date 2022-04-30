@@ -203,6 +203,7 @@ public:
         scope (failure) {
             os.kill(pid, os.SIGKILL);
             int wstatus; os.waitpid(pid, wstatus, 0);
+            if (pidfd != -1) os.close(pidfd);
         }
 
         // Close write end of the pipe.
