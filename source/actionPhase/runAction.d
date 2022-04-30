@@ -7,12 +7,45 @@ import snowflake.utility.command : Command;
 import os = snowflake.utility.os;
 
 /**
+ * Information about a run action.
+ */
+struct RunAction
+{
+    /**
+     * The program to run.
+     */
+    string program;
+
+    /**
+     * Arguments to pass to the program.
+     * The first argument is generally equal to `program`.
+     */
+    string[] arguments;
+
+    /**
+     * Environment entries to pass to the program.
+     */
+    string[] environment;
+
+    /**
+     * Outputs that the program must generate.
+     */
+    string[] outputs;
+
+    /**
+     * The maximum time the program may spend.
+     * If exceeded, the program is killed.
+     */
+    Duration timeout;
+}
+
+/**
  * Perform a run action.
  */
 @safe
-void performRunAction(Context context, Duration timeout, string[] outputs)
+void performRunAction(Context context, ref const(RunAction) runAction)
 {
-    import snowflake.config : ENV_PATH, SH_PATH;
+    import snowflake.config : BASH_PATH, COREUTILS_PATH;
     import snowflake.utility.hashFile : Hash, hashFileAt;
     import std.conv : octal;
     import std.string : format;
@@ -31,18 +64,14 @@ void performRunAction(Context context, Duration timeout, string[] outputs)
     os.mkdirat(scratchDir, "output",    octal!"755");  // Outputs placed here.
 
     // Create symbolic links to implicit dependencies.
-    os.symlinkat(SH_PATH,  scratchDir, "bin/sh");
-    os.symlinkat(ENV_PATH, scratchDir, "usr/bin/env");
+    os.symlinkat(BASH_PATH      ~ "/bin/bash", scratchDir, "bin/sh");
+    os.symlinkat(COREUTILS_PATH ~ "/bin/env",  scratchDir, "usr/bin/env");
 
     // Configure the command to run.
     auto command = Command(
-        /* pathname */ "/bin/sh",
-        /* argv     */ ["bash", "-c", `
-            export PATH=/nix/store/l0zvs9z152zys4sxa64hkvnxalgkszpi-coreutils-9.0/bin
-            touch /output/main.o
-            exit 1
-        `],
-        /* envp     */ ["USER=root"],
+        runAction.program,
+        runAction.arguments,
+        runAction.environment,
     );
 
     // Create namespaces to form a container.
@@ -81,7 +110,7 @@ void performRunAction(Context context, Duration timeout, string[] outputs)
     command.chrootChdir = "/build";
 
     // Run the command.
-    command.run(timeout);
+    command.run(runAction.timeout);
 
     // Open the output directory.
     const outputDir = os.openat(scratchDir, "output",
@@ -93,7 +122,7 @@ void performRunAction(Context context, Duration timeout, string[] outputs)
     // because we don't want to move any outputs to the cache
     // if any output was not present or not hashable.
     Hash[string] outputHashes;
-    foreach (output; outputs) {
+    foreach (output; runAction.outputs) {
         const hash = hashFileAt(outputDir, output);
         outputHashes[output] = hash;
     }

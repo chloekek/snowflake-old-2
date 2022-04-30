@@ -11,7 +11,7 @@ in
         ];
 
         # Environment variables used by build script.
-        SNOWFLAKE_SH_PATH = "${nixpkgs.bash}/bin/bash";
-        SNOWFLAKE_ENV_PATH = "${nixpkgs.coreutils}/bin/env";
+        SNOWFLAKE_BASH_PATH      = nixpkgs.bash;
+        SNOWFLAKE_COREUTILS_PATH = nixpkgs.coreutils;
 
     }
