@@ -1,6 +1,5 @@
 module snowflake.actionPhase.runAction;
 
-import core.time : Duration;
 import snowflake.context : Context;
 import snowflake.utility.command : Command;
 import snowflake.utility.error : QuickUserError, UserError;
@@ -13,6 +12,8 @@ import os = snowflake.utility.os;
  */
 struct RunAction
 {
+    import core.time : Duration;
+
     /**
      * The program to run.
      */
@@ -39,40 +40,6 @@ struct RunAction
      * If exceeded, the program is killed.
      */
     Duration timeout;
-}
-
-alias CommandSetupError = QuickUserError!(
-    "Could not set up the environment for a run action",
-    const(Exception), "cause",
-);
-
-alias OutputDirectoryInaccessibleError = QuickUserError!(
-    "The output directory was made inaccessible by the command",
-    const(Exception), "cause",
-);
-
-final
-class OutputsInaccessibleError
-    : UserError
-{
-    const(Exception[string]) invalidOutputs;
-
-    nothrow pure @nogc @safe
-    this(const(Exception[string]) invalidOutputs)
-    {
-        this.invalidOutputs = invalidOutputs;
-    }
-
-    nothrow pure @nogc @safe
-    string message() const scope =>
-        "The command failed to produce one or more outputs";
-
-    override pure @safe
-    void elaborate(scope UserErrorElaborator elaborator) const
-    {
-        foreach (output, exception; invalidOutputs)
-            elaborator.field(output, exception);
-    }
 }
 
 /**
@@ -219,4 +186,42 @@ void mountBindRdonly(
     const flags2 = flags1 | os.MS_RDONLY | os.MS_REMOUNT;
     command.mount(source, target, null, flags1, null);
     command.mount("none", target, null, flags2, null);
+}
+
+/+ -------------------------------------------------------------------------- +/
+/+                               User errors                                  +/
+/+ -------------------------------------------------------------------------- +/
+
+alias CommandSetupError = QuickUserError!(
+    "Could not set up the environment for a run action",
+    const(Exception), "cause",
+);
+
+alias OutputDirectoryInaccessibleError = QuickUserError!(
+    "The output directory was made inaccessible by the command",
+    const(Exception), "cause",
+);
+
+final
+class OutputsInaccessibleError
+    : UserError
+{
+    const(Exception[string]) invalidOutputs;
+
+    nothrow pure @nogc @safe
+    this(const(Exception[string]) invalidOutputs)
+    {
+        this.invalidOutputs = invalidOutputs;
+    }
+
+    nothrow pure @nogc @safe
+    string message() const scope =>
+        "The command failed to produce one or more outputs";
+
+    override pure @safe
+    void elaborate(scope UserErrorElaborator elaborator) const
+    {
+        foreach (output, exception; invalidOutputs)
+            elaborator.field(output, exception);
+    }
 }

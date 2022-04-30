@@ -5,45 +5,6 @@ import snowflake.utility.error : QuickUserError, UserException;
 
 public import core.sys.posix.sched : pid_t;
 
-// These are not in druntime yet.
-extern (C) nothrow private @nogc
-{
-    import core.stdc.config : c_long, c_ulong;
-
-    version (X86_64) enum os_sys_syscall_SYS_clone3 = 435;
-
-    struct os_sched_clone_args
-    {
-        ulong flags, pidfd, child_tid, parent_tid, exit_signal, stack;
-        ulong stack_size, tls, set_tid, set_tid_size, cgroup;
-    }
-
-    pragma (mangle, "mount")
-    @system int os_sys_mount_mount(
-        const(char)* source,
-        const(char)* target,
-        const(char)* filesystemtype,
-        c_ulong      mountflags,
-        const(void)* data,
-    );
-
-    pragma (mangle, "chroot")
-    @system int os_unistd_chroot(const(char)* path);
-
-    pragma (mangle, "syscall")
-    @system c_long os_unistd_syscall(c_long number, ...);
-}
-
-alias TimeoutError = QuickUserError!(
-    "Command exceeded the configured timeout",
-    Duration, "timeout",
-);
-
-alias TerminationError = QuickUserError!(
-    "Command terminated with non-zero exit status",
-    int, "wstatus",
-);
-
 /**
  * Represents a system command that can be spawned as a child process.
  * This is similar to the `std.process` module
@@ -340,6 +301,10 @@ public:
     }
 }
 
+/+ -------------------------------------------------------------------------- +/
+/+                            Utility functions                               +/
+/+ -------------------------------------------------------------------------- +/
+
 /**
  * Create a setter for a `clone3` flag.
  */
@@ -388,4 +353,51 @@ immutable(char*)* toArrayz(scope const(char[])[] self)
     import std.range : chain, only;
     import std.string : toStringz;
     return chain(self.map!toStringz, only(null)).array.ptr;
+}
+
+/+ -------------------------------------------------------------------------- +/
+/+                               User errors                                  +/
+/+ -------------------------------------------------------------------------- +/
+
+alias TimeoutError = QuickUserError!(
+    "Command exceeded the configured timeout",
+    Duration, "timeout",
+);
+
+alias TerminationError = QuickUserError!(
+    "Command terminated with non-zero exit status",
+    int, "wstatus",
+);
+
+/+ -------------------------------------------------------------------------- +/
+/+                             FFI declarations                               +/
+/+ -------------------------------------------------------------------------- +/
+
+// These are not in druntime yet.
+extern (C) nothrow private @nogc
+{
+    import core.stdc.config : c_long, c_ulong;
+
+    version (X86_64) enum os_sys_syscall_SYS_clone3 = 435;
+
+    struct os_sched_clone_args
+    {
+        ulong flags, pidfd, child_tid, parent_tid, exit_signal, stack;
+        ulong stack_size, tls, set_tid, set_tid_size, cgroup;
+    }
+
+    pragma (mangle, "mount")
+    @system int os_sys_mount_mount(
+        const(char)* source,
+        const(char)* target,
+        const(char)* filesystemtype,
+        c_ulong      mountflags,
+        const(void)* data,
+    );
+
+    pragma (mangle, "chroot")
+    @system int os_unistd_chroot(const(char)* path);
+
+    pragma (mangle, "syscall")
+    @system c_long os_unistd_syscall(c_long number, ...);
 }
