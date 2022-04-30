@@ -3,6 +3,8 @@ module snowflake.actionPhase.runAction;
 import core.time : Duration;
 import snowflake.context : Context;
 import snowflake.utility.command : Command;
+import snowflake.utility.error : QuickUserError, UserError;
+import snowflake.utility.error : UserErrorElaborator, UserException;
 
 import os = snowflake.utility.os;
 
@@ -39,16 +41,49 @@ struct RunAction
     Duration timeout;
 }
 
+alias CommandSetupError = QuickUserError!(
+    "Could not set up the environment for a run action",
+    const(Exception), "cause",
+);
+
+alias OutputDirectoryInaccessibleError = QuickUserError!(
+    "The output directory was made inaccessible by the command",
+    const(Exception), "cause",
+);
+
+final
+class OutputsInaccessibleError
+    : UserError
+{
+    const(Exception[string]) invalidOutputs;
+
+    nothrow pure @nogc @safe
+    this(const(Exception[string]) invalidOutputs)
+    {
+        this.invalidOutputs = invalidOutputs;
+    }
+
+    nothrow pure @nogc @safe
+    string message() const scope =>
+        "The command failed to produce one or more outputs";
+
+    override pure @safe
+    void elaborate(scope UserErrorElaborator elaborator) const
+    {
+        foreach (output, exception; invalidOutputs)
+            elaborator.field(output, exception);
+    }
+}
+
 /**
  * Perform a run action.
  */
 @safe
-void performRunAction(Context context, ref const(RunAction) runAction)
+void performRunAction(Context context, ref scope const(RunAction) runAction)
 {
     import snowflake.config : BASH_PATH, COREUTILS_PATH;
     import snowflake.utility.hashFile : Hash, hashFileAt;
     import std.conv : octal;
-    import std.string : format;
 
     const scratchDir = context.newScratchDir();
     scope (exit) os.close(scratchDir);
@@ -63,9 +98,63 @@ void performRunAction(Context context, ref const(RunAction) runAction)
     os.mkdirat(scratchDir, "build",     octal!"755");  // Working directory.
     os.mkdirat(scratchDir, "output",    octal!"755");  // Outputs placed here.
 
-    // Create symbolic links to implicit dependencies.
+    // These executables are expected to exist by many programs.
+    // Consider scripts with `#!/usr/bin/env` or programs calling `system(3)`.
+    // So we always make these available even if not declared as inputs.
     os.symlinkat(BASH_PATH      ~ "/bin/bash", scratchDir, "bin/sh");
     os.symlinkat(COREUTILS_PATH ~ "/bin/env",  scratchDir, "usr/bin/env");
+    // NOTE: When adding an entry here, add it to the hash of the run action.
+
+    // Run the command of the run action.
+    try
+        runCommand(runAction, scratchDir);
+    catch (UserException ex)
+        throw ex;
+    catch (Exception ex)
+        throw new UserException(new CommandSetupError(ex));
+
+    // Open the output directory that the command wrote into.
+    // If the output directory cannot be opened,
+    // then the command did something horribly wrong.
+    int outputDir;
+    try {
+        const outputFlags = os.O_DIRECTORY | os.O_PATH;
+        outputDir = os.openat(scratchDir, "output", outputFlags, 0);
+    } catch (Exception ex) {
+        const error = new OutputDirectoryInaccessibleError(ex);
+        throw new UserException(error);
+    }
+    scope (exit) os.close(outputDir);
+
+    // Compute the hash of each expected output.
+    // Outputs that were not expected are simply ignored.
+    // Expected outputs that cannot be hashed cause a failure.
+    // Collect those errors into a single exception for superior UX.
+    Exception[string] unhashableOutputs;
+    Hash[string] outputHashes;
+    foreach (output; runAction.outputs)
+        try
+            outputHashes[output] = hashFileAt(outputDir, output);
+        catch (Exception ex)
+            unhashableOutputs[output] = ex;
+    if (unhashableOutputs.length != 0) {
+        const error = new OutputsInaccessibleError(unhashableOutputs);
+        throw new UserException(error);
+    }
+
+    // TODO: Move outputs to cache.
+}
+
+/**
+ * Run the command of a run action.
+ */
+private @safe
+void runCommand(
+    ref scope const(RunAction) runAction,
+              int              scratchDir,
+)
+{
+    import std.string : format;
 
     // Configure the command to run.
     auto command = Command(
@@ -111,23 +200,6 @@ void performRunAction(Context context, ref const(RunAction) runAction)
 
     // Run the command.
     command.run(runAction.timeout);
-
-    // Open the output directory.
-    const outputDir = os.openat(scratchDir, "output",
-                                os.O_DIRECTORY | os.O_PATH, 0);
-    scope (exit) os.close(outputDir);
-
-    // Compute the hash of each output.
-    // This must not be interleaved with moving outputs to the cache,
-    // because we don't want to move any outputs to the cache
-    // if any output was not present or not hashable.
-    Hash[string] outputHashes;
-    foreach (output; runAction.outputs) {
-        const hash = hashFileAt(outputDir, output);
-        outputHashes[output] = hash;
-    }
-
-    // TODO: Move outputs to cache.
 }
 
 /**

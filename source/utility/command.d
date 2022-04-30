@@ -1,5 +1,8 @@
 module snowflake.utility.command;
 
+import core.time : Duration;
+import snowflake.utility.error : QuickUserError, UserException;
+
 public import core.sys.posix.sched : pid_t;
 
 // These are not in druntime yet.
@@ -31,6 +34,16 @@ extern (C) nothrow private @nogc
     @system c_long os_unistd_syscall(c_long number, ...);
 }
 
+alias TimeoutError = QuickUserError!(
+    "Command exceeded the configured timeout",
+    Duration, "timeout",
+);
+
+alias TerminationError = QuickUserError!(
+    "Command terminated with non-zero exit status",
+    int, "wstatus",
+);
+
 /**
  * Represents a system command that can be spawned as a child process.
  * This is similar to the `std.process` module
@@ -38,7 +51,6 @@ extern (C) nothrow private @nogc
  */
 struct Command
 {
-    import core.time : Duration;
     import std.array : Appender;
     import std.typecons : Tuple;
 
@@ -155,7 +167,7 @@ public:
 
             // If `poll` returns 0, there was a timeout.
             if (npolled == 0)
-                throw new RunTimeoutException();
+                throw new UserException(new TimeoutError(timeout));
         }
 
         // Reap the child process and find its exit status.
@@ -164,7 +176,7 @@ public:
 
         // If the child process terminated unsuccessfully, throw an exception.
         if (!os.WIFEXITED(wstatus) || os.WEXITSTATUS(wstatus) != 0)
-            throw new RunUnsuccessfulTerminationException(wstatus);
+            throw new UserException(new TerminationError(wstatus));
     }
 
     /**
@@ -376,35 +388,4 @@ immutable(char*)* toArrayz(scope const(char[])[] self)
     import std.range : chain, only;
     import std.string : toStringz;
     return chain(self.map!toStringz, only(null)).array.ptr;
-}
-
-/**
- * Thrown by `Command.run` when a timeout occurs.
- */
-final
-class RunTimeoutException
-    : Exception
-{
-    nothrow pure @nogc @safe
-    this()
-    {
-        super("Command.run: Timeout");
-    }
-}
-
-/**
- * Thrown by `Command.run` when the process terminates unsuccessfully.
- */
-final
-class RunUnsuccessfulTerminationException
-    : Exception
-{
-    const(int) wstatus;
-
-    nothrow pure @nogc @safe
-    this(int wstatus)
-    {
-        super("Command.run: Unsuccessful termination");
-        this.wstatus = wstatus;
-    }
 }
