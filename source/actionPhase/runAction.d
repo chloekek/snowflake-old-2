@@ -109,7 +109,8 @@ void performRunAction(Context context, ref scope const(RunAction) runAction)
         throw new UserException(error);
     }
 
-    // TODO: Move outputs to cache.
+    foreach (output, hash; outputHashes)
+        context.storeCachedOutput(hash, outputDir, output);
 }
 
 /**

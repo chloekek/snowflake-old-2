@@ -11,6 +11,32 @@ import os = snowflake.utility.os;
 alias Hash = ubyte[32];
 
 /**
+ * Convert a hash to its textual form.
+ */
+nothrow pure @nogc @safe
+char[64] toString(Hash hash)
+{
+    enum alphabet = "0123456789abcdef";
+    char[64] result = void;
+    foreach (i, octet; hash) {
+        result[2 * i + 0] = alphabet[octet >> 4];
+        result[2 * i + 1] = alphabet[octet & 0xF];
+    }
+    return result;
+}
+
+nothrow pure @nogc @safe
+unittest
+{
+    import snowflake.utility.blake3 : Blake3;
+    const plaintext = cast(immutable(ubyte)[]) "Hello, world!";
+    const actual    = Blake3(plaintext).finish().toString;
+    const expected  = "ede5c0b10f2ec4979c69b52f61e42ff5" ~
+                      "b413519ce09be0f14d098dcfe5f6f98d";
+    assert (actual == expected);
+}
+
+/**
  * Compute the hash of a file.
  *
  * The file may be a regular file, a symbolic link,

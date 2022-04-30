@@ -15,9 +15,8 @@ void main(string[] args)
     const script = `
         set -efuo pipefail
         export PATH=` ~ COREUTILS_PATH ~ `/bin
-        echo 'Hello, world!'
+        echo 'Hello, world!' > /output/main.h
         touch /output/main.o
-        sleep 1
     `;
 
     RunAction runAction;

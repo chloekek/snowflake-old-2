@@ -29,7 +29,8 @@ ldc2Flags=(
 
 if (( $release )); then
     ldc2Flags+=(
-        -O3  # Optimize code.
+        -O3        # Optimize code.
+        --release  # Disable assertions.
     )
 else
     ldc2Flags+=(

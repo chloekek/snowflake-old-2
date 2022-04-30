@@ -71,6 +71,8 @@ extern (C) nothrow private @nogc
     public enum O_TRUNC     = 0x000200;
     public enum O_WRONLY    = 0x000001;
 
+    public enum RENAME_NOREPLACE = 1;
+
     pragma (mangle, "fdopendir")
     @trusted os_dirent.DIR* os_dirent_fdopendir(int fd);
 
@@ -80,6 +82,13 @@ extern (C) nothrow private @nogc
         const(char)* pathname,
         int          flags,
         mode_t       mode,
+    );
+
+    pragma (mangle, "renameat2")
+    @system int os_stdio_renameat2(
+        int olddirfd, const(char)* oldpath,
+        int newdirfd, const(char)* newpath,
+        int flags,
     );
 
     pragma (mangle, "fstatat")
@@ -291,6 +300,21 @@ char[] readlinkat(
     );
     errnoEnforce(length != -1, "readlinkat: " ~ pathname);
     return buf[0 .. length];
+}
+
+@trusted
+void renameat2(
+    int olddirfd, scope const(char)[] oldpath,
+    int newdirfd, scope const(char)[] newpath,
+    int flags,
+)
+{
+    const ok = os_stdio_renameat2(
+        olddirfd, oldpath.toStringz,
+        newdirfd, newpath.toStringz,
+        flags,
+    );
+    errnoEnforce(ok != -1, "renameat2");
 }
 
 @trusted
