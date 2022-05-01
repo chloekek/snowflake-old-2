@@ -1,0 +1,65 @@
+#!/usr/bin/env perl
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# This script checks that each file contains a `SPDX-License-Identifier` line.
+# The line must be near the very top of the file.
+# Certain files are exempt from this check.
+
+use v5.12;
+use autodie;
+use warnings;
+
+use File::Find qw(find);
+
+# Files whose paths match this pattern are ignored.
+# Directories whose paths match are not descended into.
+my $exemptFiles = qr{
+    ^\./ (?:
+        \.git$    |
+        build$    |
+        testdata$ |  # See testdata/COPYING
+        COPYING\.
+    )
+}x;
+
+# The line that we expect to find in each file.
+my $expectedLine = qr{
+    SPDX-License-Identifier:
+}x;
+
+# Whether we have found any files missing a line.
+my $foundBadFiles = 0;
+
+# Callback to `find`.
+sub wanted
+{
+    # Skip files that are exempt.
+    if ($File::Find::name =~ $exemptFiles) {
+        $File::Find::prune = 1;
+        return;
+    }
+
+    # Skip files that are not regular files.
+    return unless -f $File::Find::name;
+
+    # Skip files that have the license identifier
+    # in either the first or the second line.
+    open my $file, '<', $File::Find::name;
+    return if (<$file> // '') =~ $expectedLine;
+    return if (<$file> // '') =~ $expectedLine;
+    close $file;
+
+    # Report the file as bad and update the status.
+    if (!$foundBadFiles) {
+        say STDERR 'Not every file contains a SPDX-License-Identifier '
+                 . 'directive in the first two lines:';
+    }
+    say STDERR $File::Find::name;
+    $foundBadFiles = 1;
+}
+
+# Check every file in the repository.
+find({ no_chdir => 1, wanted => \&wanted }, '.');
+
+# Exit unsuccessfully if there were bad files.
+exit $foundBadFiles;

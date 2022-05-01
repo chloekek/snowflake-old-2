@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+
 let
     nixpkgs = import nix/nixpkgs;
 in
@@ -7,6 +9,7 @@ in
         nativeBuildInputs = [
             nixpkgs.blake3                  # Hash function.
             nixpkgs.ldc                     # D compiler.
+            nixpkgs.perl                    # Used by some scripts.
             nixpkgs.python3Packages.sphinx  # Documentation typesetter.
         ];
 

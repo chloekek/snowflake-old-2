@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 module snowflake.utility.blake3;
 
 // See `c/blake.h` in the BLAKE3 repository.

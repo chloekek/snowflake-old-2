@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * Provides safe wrappers around system calls.
  *

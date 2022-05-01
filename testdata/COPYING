@@ -1,0 +1,6 @@
+The test data files cannot contain a license identifier,
+because it would render their contents unexpected.
+The following license identifier is implied
+for each file in this directory (testdata):
+
+SPDX-License-Identifier: AGPL-3.0-only

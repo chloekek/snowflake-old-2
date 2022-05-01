@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 module snowflake.actionPhase.runAction;
 
 import snowflake.context : Context;

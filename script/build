@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -efuxo pipefail
 
@@ -59,3 +60,8 @@ sphinxBuildFlags=(
 )
 
 sphinx-build "${sphinxBuildFlags[@]}" manual build/manual
+
+################################################################################
+# Check that each file contains a license identifier
+
+script/check-license

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 module snowflake.utility.hashFile;
 
 import std.bitmanip : append;
