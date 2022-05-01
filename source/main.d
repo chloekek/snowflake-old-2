@@ -17,6 +17,8 @@ void main(string[] args)
     const script = `
         set -efuo pipefail
         export PATH=` ~ COREUTILS_PATH ~ `/bin
+        echo 'foo'
+        1>&2 echo 'bar'
         echo 'Hello, world!' > /output/main.h
         touch /output/main.o
     `;

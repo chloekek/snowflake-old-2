@@ -69,9 +69,11 @@ extern (C) nothrow private @nogc
     public enum MS_REMOUNT = 0x00020;
 
     public enum O_CLOEXEC   = 0x080000;
+    public enum O_CREAT     = 0x000040;
     public enum O_DIRECTORY = 0x010000;
     public enum O_PATH      = 0x200000;
     public enum O_RDONLY    = 0x000000;
+    public enum O_RDWR      = 0x000002;
     public enum O_TRUNC     = 0x000200;
     public enum O_WRONLY    = 0x000001;
 

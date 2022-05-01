@@ -74,9 +74,14 @@ void performRunAction(Context context, ref scope const(PerformRunAction) info)
     os.symlinkat(COREUTILS_PATH ~ "/bin/env",  scratchDir, "usr/bin/env");
     // NOTE: When adding an entry here, add it to the hash of the run action.
 
+    // Open the log file.
+    const logFlags = os.O_CREAT | os.O_RDWR;
+    const logFile = os.openat(scratchDir, "build.log", logFlags, octal!"644");
+    scope (exit) os.close(logFile);
+
     // Run the command of the run action.
     try
-        runCommand(info, scratchDir);
+        runCommand(info, scratchDir, logFile);
     catch (UserException ex)
         throw ex;
     catch (Exception ex)
@@ -122,6 +127,7 @@ private @safe
 void runCommand(
     ref scope const(PerformRunAction) info,
               int                     scratchDir,
+              int                     logFile,
 )
 {
     import std.string : format;
@@ -163,6 +169,11 @@ void runCommand(
     // Then set the working directory to the build directory.
     command.chroot      = ".";
     command.chrootChdir = "/build";
+
+    // Open the log file and redirect stdio.
+    command.stdin  = Command.Close();
+    command.stdout = Command.Dup2(logFile);
+    command.stderr = Command.Dup2(logFile);
 
     // Run the command.
     command.run(info.timeout);

@@ -15,6 +15,7 @@ public import core.sys.posix.sched : pid_t;
 struct Command
 {
     import std.array : Appender;
+    import std.sumtype : SumType, match;
     import std.typecons : Tuple;
 
 private:
@@ -47,6 +48,15 @@ private:
     immutable(char)*  execvePathname;
     immutable(char*)* execveArgv;
     immutable(char*)* execveEnvp;
+
+public:
+    alias Stdio = SumType!(Inherit, Close, Dup2);
+    struct Inherit { }
+    struct Close   { }
+    struct Dup2    { int oldfd; }
+    Stdio stdin;
+    Stdio stdout;
+    Stdio stderr;
 
 public:
     @disable this();
@@ -265,6 +275,26 @@ public:
             errnoEnforcePipe(ok != -1, "close: " ~ path);
         }
 
+        // Configure a file descriptor according to a `Stdio`.
+        void configureFd(int fd, Stdio stdio)
+        {
+            stdio.match!(
+                delegate(Inherit _) {
+                    // Default behavior.
+                },
+                delegate(Close _) {
+                    const ok = os_unistd.close(fd);
+                    errnoEnforcePipe(ok != -1, "close");
+                },
+                delegate(Dup2 dup2) {
+                    // We specifically do not want `CLOEXEC` on the new file,
+                    // because it will be used by the program after `execve`.
+                    const ok = os_unistd.dup2(dup2.oldfd, fd);
+                    errnoEnforcePipe(ok != -1, "dup2");
+                },
+            );
+        }
+
         // Clone read end of the pipe.
         const ok = os_unistd.close(pipeR);
         errnoEnforcePipe(ok != -1, "close");
@@ -297,6 +327,11 @@ public:
             const good = os_unistd.chdir(chrootChdirz);
             errnoEnforcePipe(good != -1, "chdir");
         }
+
+        // Configure stdio as requested.
+        configureFd(0, stdin);
+        configureFd(1, stdout);
+        configureFd(2, stderr);
 
         // Replace the process with the requested program.
         os_unistd.execve(execvePathname, execveArgv, execveEnvp);
