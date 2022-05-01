@@ -9,6 +9,25 @@
             "command": "nix-shell --pure --run script/build",
             "group": { "kind": "build", "isDefault": true },
             "presentation": { "clear": true },
+            "problemMatcher": [
+                {
+                    "owner": "rust",
+                    "fileLocation": "relative",
+                    "pattern": [
+                        {
+                            "regexp": "^(error|note|warning)(?:\\[[^\\]]+\\])?: (.*)$",
+                            "severity": 1,
+                            "message": 2
+                        },
+                        {
+                            "regexp": "^ *--> ([^:]+):(\\d+):(\\d+)$",
+                            "file": 1,
+                            "line": 2,
+                            "column": 3
+                        }
+                    ]
+                }
+            ]
         }
     ]
 }

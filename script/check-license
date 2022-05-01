@@ -15,10 +15,11 @@ use File::Find qw(find);
 # Directories whose paths match are not descended into.
 my $exemptFiles = qr{
     ^\./ (?:
-        \.git$    |
-        build$    |
-        testdata$ |  # See testdata/COPYING
-        COPYING\.
+        \.git$       |
+        Cargo\.lock$ |
+        COPYING\.    |
+        build$       |
+        testdata$       # See testdata/COPYING
     )
 }x;
 

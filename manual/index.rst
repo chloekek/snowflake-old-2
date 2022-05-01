@@ -10,4 +10,3 @@ Snowflake manual
 
    license
    design-principles
-   for-developers

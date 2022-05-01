@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[package]
+name = "snowflake"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies.libc]
+version = "~0.2.125"
+
+[dependencies.snowflake-os]
+path = "../snowflake-os"
+
+[dependencies.thiserror]
+version = "^1.0.31"

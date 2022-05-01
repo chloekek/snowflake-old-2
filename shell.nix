@@ -2,18 +2,25 @@
 
 let
     nixpkgs = import nix/nixpkgs;
+
+    rustChannel = nixpkgs.rustChannelOf {
+        date = "2022-05-01";
+        channel = "nightly";
+        sha256 = "0yshryfh3n0fmsblna712bqgcra53q3wp1asznma1sf6iqrkrl02";
+    };
 in
     nixpkgs.mkShell {
 
         # Tools available in Nix shell.
         nativeBuildInputs = [
-            nixpkgs.blake3                  # Hash function.
-            nixpkgs.ldc                     # D compiler.
-            nixpkgs.perl                    # Used by some scripts.
-            nixpkgs.python3Packages.sphinx  # Documentation typesetter.
+            nixpkgs.blake3
+            nixpkgs.cacert
+            nixpkgs.perl
+            nixpkgs.python3Packages.sphinx
+            rustChannel.rust
         ];
 
-        # Environment variables used by build script.
+        # Environment variables used during build.
         SNOWFLAKE_BASH_PATH      = nixpkgs.bash;
         SNOWFLAKE_COREUTILS_PATH = nixpkgs.coreutils;
 
