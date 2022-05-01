@@ -9,7 +9,7 @@ import os = snowflake.utility.os;
 @safe
 string[] dirents(int fd)
 {
-    fd = os.dup(fd);
+    fd = os.fcntl_dupfd(fd);
     auto dir = os.fdopendir(fd);
     return dirents(dir);
 }

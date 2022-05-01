@@ -55,6 +55,8 @@ public import core.sys.posix.sys.wait :
 // These are not in druntime yet.
 extern (C) nothrow private @nogc
 {
+    public enum F_DUPFD_CLOEXEC = 1030;
+
     public enum MS_BIND    = 0x01000;
     public enum MS_NODEV   = 0x00004;
     public enum MS_NOEXEC  = 0x00008;
@@ -169,11 +171,20 @@ void close(int fd)
     errnoEnforce(ok != -1, "close");
 }
 
-@safe
-int dup(int oldfd)
+int dup()(int oldfd)
 {
-    const fd = os_unistd.dup(oldfd);
-    errnoEnforce(fd != -1, "dup");
+    static assert (
+        false,
+        "dup cannot set CLOEXEC. " ~
+        "Use fcntl_dupfd instead of dup",
+    );
+}
+
+@trusted
+int fcntl_dupfd(int oldfd)
+{
+    const fd = os_fcntl.fcntl(oldfd, F_DUPFD_CLOEXEC, 0);
+    errnoEnforce(fd != -1, "fcntl: F_DUPFD_CLOEXEC");
     return fd;
 }
 
