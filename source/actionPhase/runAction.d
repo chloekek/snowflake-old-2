@@ -8,9 +8,9 @@ import snowflake.utility.error : UserErrorElaborator, UserException;
 import os = snowflake.utility.os;
 
 /**
- * Information about a run action.
+ * Arguments to `performRunAction`.
  */
-struct RunAction
+struct PerformRunAction
 {
     import core.time : Duration;
 
@@ -46,7 +46,7 @@ struct RunAction
  * Perform a run action.
  */
 @safe
-void performRunAction(Context context, ref scope const(RunAction) runAction)
+void performRunAction(Context context, ref scope const(PerformRunAction) info)
 {
     import snowflake.config : BASH_PATH, COREUTILS_PATH;
     import snowflake.utility.hashFile : Hash, hashFileAt;
@@ -74,7 +74,7 @@ void performRunAction(Context context, ref scope const(RunAction) runAction)
 
     // Run the command of the run action.
     try
-        runCommand(runAction, scratchDir);
+        runCommand(info, scratchDir);
     catch (UserException ex)
         throw ex;
     catch (Exception ex)
@@ -99,7 +99,7 @@ void performRunAction(Context context, ref scope const(RunAction) runAction)
     // Collect those errors into a single exception for superior UX.
     Exception[string] unhashableOutputs;
     Hash[string] outputHashes;
-    foreach (output; runAction.outputs)
+    foreach (output; info.outputs)
         try
             outputHashes[output] = hashFileAt(outputDir, output);
         catch (Exception ex)
@@ -118,18 +118,14 @@ void performRunAction(Context context, ref scope const(RunAction) runAction)
  */
 private @safe
 void runCommand(
-    ref scope const(RunAction) runAction,
-              int              scratchDir,
+    ref scope const(PerformRunAction) info,
+              int                     scratchDir,
 )
 {
     import std.string : format;
 
     // Configure the command to run.
-    auto command = Command(
-        runAction.program,
-        runAction.arguments,
-        runAction.environment,
-    );
+    auto command = Command(info.program, info.arguments, info.environment);
 
     // Create namespaces to form a container.
     command.cloneNewcgroup = true;  // New cgroup namespace.
@@ -167,7 +163,7 @@ void runCommand(
     command.chrootChdir = "/build";
 
     // Run the command.
-    command.run(runAction.timeout);
+    command.run(info.timeout);
 }
 
 /**
